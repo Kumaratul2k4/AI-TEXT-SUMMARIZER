@@ -5,12 +5,13 @@ gunicorn
 # AI & NLP
 transformers==4.35.2
 torch
-sentencepiece # Required for T5 models
+sentencepiece
 protobuf
 
 # Web Scraping
 requests==2.31.0
 trafilatura==1.6.1
+lxml-html-clean 
 
 # Utilities
 beautifulsoup4
