@@ -1,113 +1,73 @@
 import requests
 from bs4 import BeautifulSoup
 import re
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urlparse
 
 def scrape_article(url):
     """
-    Scrape text content from a given URL
-    
-    Args:
-        url (str): The URL to scrape
-    
-    Returns:
-        str: Extracted text content or None if failed
+    Scrape text content from a given URL.
+    Returns cleaned article text or None if failed.
     """
     try:
-        # Add headers to mimic a real browser
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': (
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                'AppleWebKit/537.36 (KHTML, like Gecko) '
+                'Chrome/91.0.4472.124 Safari/537.36'
+            )
         }
-        
-        # Send GET request
+
         response = requests.get(url, headers=headers, timeout=10)
         response.raise_for_status()
-        
-        # Parse HTML content
-        soup = BeautifulSoup(response.content, 'html.parser')
-        
-        # Remove script and style elements
-        for script in soup(["script", "style"]):
-            script.decompose()
-        
-        # Try to find main content areas
+
+        soup = BeautifulSoup(response.content, 'lxml')  # Use lxml: faster & lower memory
+
+        for tag in soup(["script", "style", "noscript", "header", "footer", "nav", "aside"]):
+            tag.decompose()
+
         content_selectors = [
-            'article',
-            '[role="main"]',
-            '.content',
-            '.article-content',
-            '.post-content',
-            '.entry-content',
-            'main',
-            '.main-content'
+            'article', '[role="main"]', '.content',
+            '.article-content', '.post-content',
+            '.entry-content', 'main', '.main-content'
         ]
-        
+
         text_content = ""
-        
-        # Try each selector to find the main content
         for selector in content_selectors:
-            elements = soup.select(selector)
-            if elements:
-                for element in elements:
-                    text_content += element.get_text(separator=' ', strip=True) + ' '
+            for element in soup.select(selector):
+                text_content += element.get_text(separator=' ', strip=True) + ' '
+            if text_content.strip():
                 break
-        
-        # If no specific content area found, extract from body
+
         if not text_content.strip():
             body = soup.find('body')
             if body:
                 text_content = body.get_text(separator=' ', strip=True)
-        
-        # Clean up the text
-        text_content = clean_text(text_content)
-        
-        # Return None if text is too short
-        if len(text_content.strip()) < 100:
-            return None
-        
-        return text_content
-    
+
+        cleaned = clean_text(text_content)
+        return cleaned if len(cleaned) >= 100 else None
+
     except requests.RequestException as e:
-        print(f"Error fetching URL: {e}")
+        print(f"[URL Error] {e}")
         return None
     except Exception as e:
-        print(f"Error parsing content: {e}")
+        print(f"[Parsing Error] {e}")
         return None
 
 def clean_text(text):
     """
-    Clean and normalize text content
-    
-    Args:
-        text (str): Raw text content
-    
-    Returns:
-        str: Cleaned text
+    Normalize and clean the raw text.
     """
-    # Remove extra whitespace
     text = re.sub(r'\s+', ' ', text)
-    
-    # Remove special characters but keep basic punctuation
-    text = re.sub(r'[^\w\s.,!?;:()\-"\']', ' ', text)
-    
-    # Remove multiple consecutive punctuation
-    text = re.sub(r'[.,!?;:]{2,}', '.', text)
-    
-    # Strip and return
+    text = re.sub(r'[^\w\s.,!?;:()\'"-]', '', text)
+    text = re.sub(r'([.,!?;:]){2,}', r'\1', text)
     return text.strip()
 
 def is_valid_url(url):
     """
-    Check if a URL is valid
-    
-    Args:
-        url (str): URL to validate
-    
-    Returns:
-        bool: True if valid, False otherwise
+    Basic URL format validation.
     """
     try:
         result = urlparse(url)
-        return all([result.scheme, result.netloc])
+        return bool(result.scheme and result.netloc)
     except:
         return False
