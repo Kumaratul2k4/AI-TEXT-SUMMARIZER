@@ -1,19 +1,17 @@
-# gunicorn_config.py
 import os
 
-# 1. Reduced workers to 1 to save memory on free hosting plans.
+# Set number of workers — 1 is best for free/low-memory hosting
 workers = 1
 
-# 2. Made the bind address dynamic to work with hosting platforms.
-# It uses the PORT environment variable if available, otherwise defaults to 8000.
-port = os.environ.get("PORT", "8000")
+# Bind to dynamic port (Heroku, Replit, etc.) or fallback to localhost:8000
+port = os.getenv("PORT", "8000")
 bind = f"0.0.0.0:{port}"
 
-# Timeout for handling a request (in seconds)
+# Increase timeout for large model loading or slow responses
 timeout = 120
 
-# Log level
+# Set logging level
 loglevel = "info"
 
-# Preloading the app can save some memory on startup.
+# Load the app before forking worker processes
 preload_app = True
