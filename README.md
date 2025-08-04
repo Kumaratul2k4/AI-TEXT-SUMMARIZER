@@ -1,6 +1,6 @@
 # AI-Powered Text Summarizer 📝
 
-A lightweight, powerful web application built with **Streamlit** that automatically generates concise summaries from long articles, documents, or text blocks. This project is optimized for low-memory deployment on cloud platforms.
+A lightweight, powerful web application built with **Streamlit** that automatically generates concise summaries from long articles, documents, or text blocks. This project is optimized for low-memory deployment on cloud platforms like Render.
 
 ## Features
 
@@ -8,19 +8,17 @@ A lightweight, powerful web application built with **Streamlit** that automatica
 - **Direct Text Input**: Copy and paste text directly for summarization.
 - **Memory-Efficient AI**: Uses a lightweight, pre-trained transformer model (`t5-small`) to ensure it runs smoothly on free hosting plans.
 - **Interactive UI**: Clean, modern, and responsive web interface built with Streamlit.
-- **Production Ready**: Includes instructions for easy deployment to Streamlit Community Cloud.
+- **Production Ready**: Includes a `Dockerfile` for easy, robust deployment.
 
 ## Technology Stack
 
 - **Web Framework**: Streamlit
 - **AI/ML**: Hugging Face Transformers, PyTorch
 - **Web Scraping**: `trafilatura`, Requests
-- **Deployment**: Streamlit Community Cloud
+- **Deployment**: Docker, Render
 - **Default Model**: `t5-small`
 
 ## Project Structure
-
-The `Dockerfile` is optional and only needed if you choose to deploy using Docker instead of Streamlit Community Cloud.
 
 ```
 AI-TEXT-SUMMARIZER/
@@ -28,7 +26,7 @@ AI-TEXT-SUMMARIZER/
 ├── scraper.py          # Web scraping functionality
 ├── summarizer.py       # AI summarization logic
 ├── requirements.txt    # Python dependencies
-├── Dockerfile          # Optional: For Docker-based deployments
+├── Dockerfile          # Container configuration for deployment
 └── README.md           # Project documentation
 ```
 
@@ -58,23 +56,22 @@ AI-TEXT-SUMMARIZER/
 
 ---
 
-## Deployment (Production)
+## Deployment (Production on Render)
 
-This project is configured for easy deployment directly to **Streamlit Community Cloud**.
+This project is configured for easy deployment using Docker on the **Render** cloud platform.
 
-### Prerequisites
+### Step 1: Push to GitHub
 
-- Your app code must be in a **public** GitHub repository.
-- Your repository must contain a `requirements.txt` file.
+Push your complete project, including the `Dockerfile`, to a GitHub repository.
 
-### Deployment Steps
+### Step 2: Deploy on Render
 
-1.  **Sign up** or log in to [share.streamlit.io](https://share.streamlit.io).
-2.  Click the **"New app"** button on the top right of your workspace.
-3.  **Configure the deployment:**
-    - **Repository**: Choose the GitHub repository for this project.
-    - **Branch**: Select the branch you want to deploy (e.g., `main`).
-    - **Main file path**: Enter the name of your main script (e.g., `app.py`).
-4.  Click the **"Deploy!"** button.
+1.  **Sign up** or log in to [dashboard.render.com](https://dashboard.render.com).
+2.  Click **New +** and select **Web Service**.
+3.  **Connect your GitHub account** and select your project repository.
+4.  On the configuration screen, set the following:
+    - **Environment**: Select **`Docker`**. Render will automatically find and use your `Dockerfile`.
+    - **Instance Type**: Choose the **Free** plan.
+5.  Click **Create Web Service**.
 
-Streamlit will now build the environment from your `requirements.txt` file and deploy your application. Once complete, you will get a public URL to access your live summarizer app.
+Render will now build the Docker image and deploy your Streamlit application. Once complete, you will get a public URL to access your live summarizer app.
