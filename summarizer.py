@@ -4,98 +4,99 @@ from transformers import pipeline
 
 class TextSummarizer:
     """
-    A class to handle text summarization using transformer models.
-    Handles long texts by chunking and provides options for batch processing.
+    A class to handle text summarization using a lightweight transformer model.
+    Handles long texts by chunking them.
     """
-    def __init__(self, model_name="sshleifer/distilbart-cnn-12-6"):
+    def __init__(self, model_name="t5-small"):
+        """
+        Initializes the summarizer with a memory-efficient model.
+        Good alternatives: 'mrm8488/t5-small-finetuned-summarize-news'
+        """
         self.model_name = model_name
         self.summarizer = None
-        self.load_model()
+        self._load_model()
 
-    def load_model(self):
+    def _load_model(self):
         """
         Load the summarization model and pipeline.
-        Attempts to use GPU and float16 for performance.
+        This is designed to be CPU-friendly for free hosting tiers.
         """
-        print(f"Attempting to load model: {self.model_name}...")
+        print(f"Attempting to load lightweight model: {self.model_name}...")
         try:
-            device = 0 if torch.cuda.is_available() else -1
-            torch_dtype = torch.float16 if torch.cuda.is_available() else torch.float32
-
+            # Forcing CPU usage as free tiers rarely have GPUs.
+            # This prevents attempts to allocate CUDA memory.
+            device = -1
+            
             self.summarizer = pipeline(
                 "summarization",
                 model=self.model_name,
-                device=device,
-                torch_dtype=torch_dtype
+                tokenizer=self.model_name, # Explicitly define tokenizer
+                device=device
             )
-            print(f"✅ Model '{self.model_name}' loaded successfully.")
-            print("   -> Running on GPU." if device == 0 else "   -> Running on CPU.")
+            print(f"✅ Model '{self.model_name}' loaded successfully on CPU.")
         except Exception as e:
             print(f"❌ Error loading model '{self.model_name}': {e}")
+            # This allows the app to run, but summarization will fail.
+            self.summarizer = None
             raise
 
-    def chunk_text(self, text, max_chunk_chars=4000):
+    def _chunk_text(self, text, max_chunk_length=512):
+        """
+        Splits text into chunks suitable for the model's max input size.
+        Uses sentences as split points to maintain context.
+        """
+        # T5 models often have a 512-token limit. We chunk based on that.
+        # Using a simple word count as a proxy for token count.
         sentences = re.split(r'(?<=[.!?])\s+', text.strip())
         chunks = []
-        current_chunk = ""
+        current_chunk_words = []
+        
         for sentence in sentences:
-            if len(current_chunk) + len(sentence) > max_chunk_chars and current_chunk:
-                chunks.append(current_chunk.strip())
-                current_chunk = sentence
+            sentence_words = sentence.split()
+            if len(current_chunk_words) + len(sentence_words) > max_chunk_length:
+                if current_chunk_words:
+                    chunks.append(" ".join(current_chunk_words))
+                current_chunk_words = sentence_words
             else:
-                current_chunk += " " + sentence if current_chunk else sentence
-        if current_chunk.strip():
-            chunks.append(current_chunk.strip())
+                current_chunk_words.extend(sentence_words)
+
+        if current_chunk_words:
+            chunks.append(" ".join(current_chunk_words))
+            
         return chunks
 
-    def summarize(self, text, summary_ratio=0.3, min_length=30, max_length=150):
-        if not self.summarizer or not text or len(text.strip()) < 50:
-            return "Text is too short to summarize or model not loaded."
-
-        word_count = len(text.split())
-        target_summary_length = max(min_length, int(word_count * summary_ratio))
-
-        if word_count <= 500:
-            summary = self.summarizer(
-                text,
-                min_length=min(min_length, target_summary_length),
-                max_length=min(max_length, target_summary_length + 20),
-                do_sample=False,
-                truncation=True
-            )
-            return summary[0]['summary_text']
-
-        chunks = self.chunk_text(text)
-        chunk_summaries = self.summarizer(
-            chunks,
-            min_length=20,
-            max_length=100,
-            do_sample=False,
-            truncation=True
-        )
-        combined_summary = ' '.join([s['summary_text'] for s in chunk_summaries])
-
-        if len(combined_summary.split()) > target_summary_length:
-            final_summary = self.summarizer(
-                combined_summary,
-                min_length=min_length,
-                max_length=min(max_length, target_summary_length),
-                do_sample=False,
-                truncation=True
-            )
-            return final_summary[0]['summary_text']
-        else:
-            return combined_summary
-
-    def summarize_batch(self, texts_list, min_length=30, max_length=150):
+    def summarize(self, text, min_length=30, max_length=150):
         if not self.summarizer:
-            return ["Model not loaded." for _ in texts_list]
+            return "Model is not available. The application might have failed to load it."
+        if not text or len(text.strip()) < 100:
+            return "Text is too short to provide a meaningful summary."
 
-        summaries = self.summarizer(
-            texts_list,
-            min_length=min_length,
-            max_length=max_length,
-            do_sample=False,
-            truncation=True
-        )
-        return [s['summary_text'] for s in summaries]
+        # The t5 models require a prefix
+        prefixed_text = "summarize: " + text
+
+        # Check if text is long and needs chunking
+        if len(prefixed_text.split()) > 500:
+            print("📝 Text is long, processing in chunks...")
+            chunks = self._chunk_text(prefixed_text)
+            
+            # Summarize each chunk individually
+            chunk_summaries = self.summarizer(
+                chunks,
+                min_length=20,
+                max_length=80, # Keep chunk summaries shorter
+                truncation=True
+            )
+            
+            # Combine the summaries of the chunks
+            combined_summary = ' '.join([summ['summary_text'] for summ in chunk_summaries])
+            return combined_summary
+        else:
+            # Process shorter texts directly
+            print("📝 Processing a single block of text...")
+            summary_list = self.summarizer(
+                prefixed_text,
+                min_length=min_length,
+                max_length=max_length,
+                truncation=True
+            )
+            return summary_list[0]['summary_text']
