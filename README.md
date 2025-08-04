@@ -19,16 +19,20 @@ A lightweight, powerful web application that automatically generates concise sum
 - **Deployment**: Docker, Gunicorn
 - **Default Model**: `t5-small` (a lightweight and efficient model)
 
-### Project Structure
+## Project Structure
+
+```
 AI-TEXT-SUMMARIZER/
 ├── app.py              # Main Flask application
-├── scraper.py          # Web scraping functionality (using trafilatura)
-├── summarizer.py       # AI summarization logic (optimized for t5-small)
-├── requirements.txt    # Lean Python dependencies
+├── scraper.py          # Web scraping functionality
+├── summarizer.py       # AI summarization logic
+├── requirements.txt    # Python dependencies
 ├── Dockerfile          # Container configuration for deployment
 ├── gunicorn_config.py  # Gunicorn server configuration
 ├── .gitignore          # Git ignore rules
-└── README.md           # Project documentation 
+└── README.md           # Project documentation
+```
+
 ---
 
 ## Local Development Setup
