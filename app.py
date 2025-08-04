@@ -1,72 +1,92 @@
-from flask import Flask, render_template, request, jsonify
+# Main application file
+import streamlit as st
 from summarizer import TextSummarizer
 from scraper import scrape_article
-import os
 
-app = Flask(__name__)
+# --- Page Configuration ---
+st.set_page_config(
+    page_title="AI Text Summarizer",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 
-# --- Model Loading ---
-# Load the model when the application starts.
-# Gunicorn's `preload_app = True` ensures this runs once before workers are forked.
-summarizer_instance = None
-try:
-    summarizer_instance = TextSummarizer()
-except Exception as e:
-    print(f"FATAL: Could not initialize TextSummarizer. The app will run but summarization will fail. Error: {e}")
+# --- Caching the Model ---
+# Use st.cache_resource to load the model only once
+@st.cache_resource
+def load_summarizer():
+    """Loads the summarization model."""
+    print("--- Loading summarization model ---")
+    return TextSummarizer()
 
-@app.route('/')
-def index():
-    return render_template('index.html')
+# --- Main Application UI ---
+def main():
+    st.title("🤖 AI Text Summarizer")
+    st.markdown("Transform long articles and documents into concise, intelligent summaries. Powered by Streamlit and Hugging Face Transformers.")
 
-@app.route('/summarize', methods=['POST'])
-def summarize_route():
+    # Load the model from cache
+    summarizer_instance = load_summarizer()
+
+    # Check if the model loaded successfully
     if not summarizer_instance or not summarizer_instance.summarizer:
-        return jsonify({'error': 'The summarization model is not available. Please contact support or check server logs.'}), 503
+        st.error("🚨 The summarization model failed to load. Please check the server logs or contact support.")
+        return
 
-    try:
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'Invalid request format. Expected JSON.'}), 400
+    # Create tabs for different input methods
+    tab1, tab2 = st.tabs(["📄 Summarize from URL", "📝 Summarize Text"])
 
-        text_to_summarize = ""
-        source_type = ""
+    with tab1:
+        st.header("Summarize from an Article URL")
+        url_input = st.text_input("Enter the article URL:", placeholder="https://example.com/article")
 
-        if 'url' in data and data['url']:
-            source_type = "url"
-            url = data['url']
-            print(f"🔗 Received URL for summarization: {url}")
-            scraped_text = scrape_article(url)
-            if not scraped_text or len(scraped_text.strip()) < 100:
-                return jsonify({'error': 'Failed to scrape sufficient content from the URL. Please try another article or paste the text directly.'}), 400
-            text_to_summarize = scraped_text
-        elif 'text' in data and data['text']:
-            source_type = "text"
-            text = data['text']
-            print("📝 Received text for summarization.")
-            if len(text.strip()) < 100:
-                return jsonify({'error': 'Text is too short to summarize. Please provide at least 100 characters.'}), 400
-            text_to_summarize = text
-        else:
-            return jsonify({'error': 'Request must include either a "url" or "text" field.'}), 400
+        if st.button("🚀 Summarize from URL", key="url_button"):
+            if not url_input or not url_input.startswith("http"):
+                st.warning("Please enter a valid URL.")
+            else:
+                with st.spinner("🧠 Scraping article and summarizing... This may take a moment."):
+                    try:
+                        scraped_text = scrape_article(url_input)
+                        if not scraped_text or len(scraped_text.strip()) < 100:
+                            st.error("Failed to scrape sufficient content. The website might be blocking scrapers. Please try another URL or paste the text directly.")
+                        else:
+                            summary = summarizer_instance.summarize(scraped_text)
+                            display_summary(summary, scraped_text)
+                    except Exception as e:
+                        st.error(f"An error occurred: {e}")
 
-        summary = summarizer_instance.summarize(text_to_summarize)
+    with tab2:
+        st.header("Summarize from Pasted Text")
+        text_input = st.text_area("Paste your text here (at least 100 characters):", height=250, placeholder="Paste your article, document, or any long text here...")
 
-        # Return character lengths to match the frontend JavaScript calculation
-        response_data = {
-            'summary': summary,
-            'original_length': len(text_to_summarize),
-            'summary_length': len(summary)
-        }
-        
-        print("✅ Summarization complete.")
-        return jsonify(response_data)
+        if st.button("🚀 Summarize Text", key="text_button"):
+            if len(text_input.strip()) < 100:
+                st.warning("Text is too short. Please provide at least 100 characters.")
+            else:
+                with st.spinner("🧠 AI is processing your content..."):
+                    try:
+                        summary = summarizer_instance.summarize(text_input)
+                        display_summary(summary, text_input)
+                    except Exception as e:
+                        st.error(f"An error occurred: {e}")
 
-    except Exception as e:
-        print(f"⚠️ An unexpected error occurred during summarization: {e}")
-        return jsonify({'error': 'An internal server error occurred. Please try again later.'}), 500
+def display_summary(summary, original_text):
+    """Helper function to display the summarization results."""
+    st.subheader("📋 Summary")
+    
+    original_len = len(original_text)
+    summary_len = len(summary)
+    compression_ratio = f"{((1 - summary_len / original_len) * 100):.1f}%" if original_len > 0 else "N/A"
+
+    # Display stats in columns
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Original Length", f"{original_len:,} chars")
+    col2.metric("Summary Length", f"{summary_len:,} chars")
+    col3.metric("Compression", compression_ratio)
+
+    st.success(summary)
+
+    with st.expander("Show Original Text"):
+        st.text(original_text)
 
 if __name__ == '__main__':
-    # This block is mainly for local development.
-    # For production, Gunicorn is used.
-    print("🚀 Starting Flask server for local development...")
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    main()
