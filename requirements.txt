@@ -1,43 +1,17 @@
 # Web Framework & Server
-gunicorn
 Flask==2.3.3
+gunicorn
 
-requests==2.31.0
-beautifulsoup4==4.12.2
+# AI & NLP
 transformers==4.35.2
 torch
-torchvision
-torchaudio
-numpy
-scipy
-scikit-learn
-lxml
-html5lib
-sentencepiece
-sacremoses
+sentencepiece # Required for T5 models
 protobuf
-huggingface-hub
-tokenizers
-safetensors
-Werkzeug
-Jinja2
-MarkupSafe
-click
-itsdangerous
-blinker
-certifi
-charset-normalizer
-idna
-urllib3
-soupsieve
-regex
-filelock
-fsspec
-PyYAML
-typing-extensions
-packaging
-sympy
-networkx
-Pillow
-mpmath
-trafilatura
+
+# Web Scraping
+requests==2.31.0
+trafilatura==1.6.1
+
+# Utilities
+beautifulsoup4
+lxml
