@@ -1,97 +1,72 @@
 from flask import Flask, render_template, request, jsonify
-import os
-import socket
 from summarizer import TextSummarizer
 from scraper import scrape_article
+import os
 
 app = Flask(__name__)
 
-# Use a lightweight model (or switch to a lighter alternative if needed)
+# --- Model Loading ---
+# Load the model when the application starts.
+# Gunicorn's `preload_app = True` ensures this runs once before workers are forked.
 summarizer_instance = None
-
-@app.before_first_request
-def load_model():
-    """Load the summarization model once before first request."""
-    global summarizer_instance
-    print("⏳ Loading summarization model...")
-    try:
-        summarizer_instance = TextSummarizer()
-        print("✅ Model loaded successfully.")
-    except Exception as e:
-        print(f"❌ Failed to load model: {e}")
-        summarizer_instance = None
+try:
+    summarizer_instance = TextSummarizer()
+except Exception as e:
+    print(f"FATAL: Could not initialize TextSummarizer. The app will run but summarization will fail. Error: {e}")
 
 @app.route('/')
 def index():
     return render_template('index.html')
 
 @app.route('/summarize', methods=['POST'])
-def summarize():
-    global summarizer_instance
+def summarize_route():
+    if not summarizer_instance or not summarizer_instance.summarizer:
+        return jsonify({'error': 'The summarization model is not available. Please contact support or check server logs.'}), 503
+
     try:
         data = request.get_json()
         if not data:
-            return jsonify({'error': 'Invalid request. Expected JSON.'}), 400
+            return jsonify({'error': 'Invalid request format. Expected JSON.'}), 400
 
-        url = data.get('url')
-        text = data.get('text')
+        text_to_summarize = ""
+        source_type = ""
 
-        if not summarizer_instance:
-            return jsonify({'error': 'Model not loaded. Please retry later.'}), 500
-
-        if url:
-            print(f"🔗 Scraping and summarizing from URL: {url}")
+        if 'url' in data and data['url']:
+            source_type = "url"
+            url = data['url']
+            print(f"🔗 Received URL for summarization: {url}")
             scraped_text = scrape_article(url)
-            if not scraped_text or len(scraped_text.strip()) < 50:
-                return jsonify({'error': 'Failed to scrape sufficient content from the URL.'}), 400
+            if not scraped_text or len(scraped_text.strip()) < 100:
+                return jsonify({'error': 'Failed to scrape sufficient content from the URL. Please try another article or paste the text directly.'}), 400
             text_to_summarize = scraped_text
-        elif text:
-            print("📝 Summarizing provided text.")
-            if len(text.strip()) < 50:
-                return jsonify({'error': 'Text too short to summarize.'}), 400
+        elif 'text' in data and data['text']:
+            source_type = "text"
+            text = data['text']
+            print("📝 Received text for summarization.")
+            if len(text.strip()) < 100:
+                return jsonify({'error': 'Text is too short to summarize. Please provide at least 100 characters.'}), 400
             text_to_summarize = text
         else:
-            return jsonify({'error': 'Provide either "url" or "text".'}), 400
+            return jsonify({'error': 'Request must include either a "url" or "text" field.'}), 400
 
         summary = summarizer_instance.summarize(text_to_summarize)
 
-        return jsonify({
+        # Return character lengths to match the frontend JavaScript calculation
+        response_data = {
             'summary': summary,
-            'original_text': text_to_summarize,
-            'original_length': len(text_to_summarize.split()),
-            'summary_length': len(summary.split())
-        })
+            'original_length': len(text_to_summarize),
+            'summary_length': len(summary)
+        }
+        
+        print("✅ Summarization complete.")
+        return jsonify(response_data)
 
     except Exception as e:
-        print(f"⚠️ Summarization error: {e}")
-        return jsonify({'error': 'An internal server error occurred.'}), 500
-
-def get_local_ip():
-    """Get the machine's local IP."""
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        s.connect(('10.255.255.255', 1))
-        IP = s.getsockname()[0]
-    except Exception:
-        IP = '127.0.0.1'
-    finally:
-        s.close()
-    return IP
+        print(f"⚠️ An unexpected error occurred during summarization: {e}")
+        return jsonify({'error': 'An internal server error occurred. Please try again later.'}), 500
 
 if __name__ == '__main__':
-    if not os.path.exists('templates'):
-        os.makedirs('templates')
-    if not os.path.exists('templates/index.html'):
-        with open('templates/index.html', 'w') as f:
-            f.write('<h1>Summarizer API is running</h1>')
-
-    port = 5000
-    local_ip = get_local_ip()
-
-    print("\n" + "="*50)
-    print("🚀 Flask server started")
-    print(f"🔗 Local:   http://127.0.0.1:{port}")
-    print(f"🌐 Network: http://{local_ip}:{port}")
-    print("="*50 + "\n")
-
-    app.run(debug=False, host='0.0.0.0', port=port)
+    # This block is mainly for local development.
+    # For production, Gunicorn is used.
+    print("🚀 Starting Flask server for local development...")
+    app.run(host='0.0.0.0', port=5000, debug=True)
